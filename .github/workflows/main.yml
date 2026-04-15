@@ -1,0 +1,17 @@
+name: Processamento Manual SIB
+
+# Gatilho: Apenas acionamento manual
+on:
+  workflow_dispatch:
+
+jobs:
+  executar-no-meu-pc:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Rodar Script de Processamento
+        # Se for Windows, tente apenas 'python', se for Linux/Mac, 'python3'
+        run: python sib_inativo.py
