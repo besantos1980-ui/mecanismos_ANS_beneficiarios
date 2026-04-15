@@ -81,12 +81,18 @@ def processar_sib_trimestral(caminho_csv):
     except Exception as e:
         print(f"ERRO CRÍTICO: {e}")
 
-# --- Busca arquivos .csv na pasta raiz ---
-arquivos_csv = glob.glob("sib_inativo_*.csv")
+# No final do seu script sib_inativo.py
+import os
+import glob
+
+# Use o caminho real da sua pasta do OneDrive
+caminho_local = r"C:\Users\bruno.santos\OneDrive - ABRAMGE\Beneficiários_SIB"
+
+# O script vai procurar todos os CSVs dentro dessa pasta específica
+arquivos_csv = glob.glob(os.path.join(caminho_local, "sib_inativo_*.csv"))
 
 if not arquivos_csv:
-    print("ERRO: Nenhum arquivo 'sib_inativo_FF.csv' encontrado.")
-    print(f"Arquivos no diretório: {os.listdir('.')}")
+    print(f"Aviso: Nenhum arquivo encontrado em {caminho_local}")
 else:
     for csv in arquivos_csv:
         processar_sib_trimestral(csv)
