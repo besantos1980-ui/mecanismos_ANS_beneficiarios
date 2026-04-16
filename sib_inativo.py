@@ -86,11 +86,6 @@ caminho_local = r"C:\Users\bruno.santos\OneDrive - ABRAMGE\Beneficiários_SIB"
 arquivos_csv = glob.glob(os.path.join(caminho_local, "sib_inativo_*.csv"))
 
 if not arquivos_csv:
-    print(f"Aviso: Nenhum arquivo encontrado em {caminho_local}")
-else:
-    for csv in arquivos_csv:
-        processar_sib_trimestral(csv)
-if not arquivos_csv:
     print("Nenhum arquivo CSV encontrado para processar.")
 else:
     for f in arquivos_csv:
