@@ -75,7 +75,21 @@ def processar_sib_csv_incremental(caminho_csv):
 # --- Execução ---
 # Lembre-se de ajustar o caminho para a sua pasta do OneDrive se necessário
 arquivos_csv = glob.glob("sib_inativo_*.csv") 
+# No final do seu script sib_inativo.py
+import os
+import glob
 
+# Use o caminho real da sua pasta do OneDrive
+caminho_local = r"C:\Users\bruno.santos\OneDrive - ABRAMGE\Beneficiários_SIB" 
+
+# O script vai procurar todos os CSVs dentro dessa pasta específica
+arquivos_csv = glob.glob(os.path.join(caminho_local, "sib_inativo_*.csv"))
+
+if not arquivos_csv:
+    print(f"Aviso: Nenhum arquivo encontrado em {caminho_local}")
+else:
+    for csv in arquivos_csv:
+        processar_sib_trimestral(csv)
 if not arquivos_csv:
     print("Nenhum arquivo CSV encontrado para processar.")
 else:
