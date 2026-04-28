@@ -14,47 +14,73 @@ ANOS_INTERESSE = [2018, 2019, 2020, 2021, 2022, 2023, 2024]
 MODALIDADES = (22, 24, 25, 27, 28, 29)
 
 def baixar_arquivos():
-    """Faz o download dos arquivos ZIP da ANS para C:/dados_ans."""
+    """Faz o download dos arquivos ZIP da ANS para C:/dados_ans com seletor refinado."""
     print("--- INICIANDO FASE DE DOWNLOAD ---")
     if not os.path.exists(DIRETORIO_BASE):
         os.makedirs(DIRETORIO_BASE)
 
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(URL_AMBULATORIAL, headers=headers, timeout=30)
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Encontra os links das pastas de anos
+        # Pega todos os links da página
         links = soup.find_all('a', href=True)
-        for link in links:
-            href = link['href'].strip('/')
-            if href.isdigit() and int(href) in ANOS_INTERESSE:
-                ano_str = href
-                url_ano = urljoin(URL_AMBULATORIAL, href + '/')
-                
-                pasta_ano = os.path.join(DIRETORIO_BASE, "ambulatorial", ano_str)
-                os.makedirs(pasta_ano, exist_ok=True)
+        
+        # Filtra apenas os que são números de anos de interesse
+        anos_disponiveis = []
+        for l in links:
+            txt = l.get_text().replace('/', '').strip()
+            if txt.isdigit() and int(txt) in ANOS_INTERESSE:
+                anos_disponiveis.append((txt, urljoin(URL_AMBULATORIAL, l['href'])))
 
-                print(f"Verificando arquivos para o ano: {ano_str}...")
-                res_ano = requests.get(url_ano, headers=headers, timeout=30)
-                soup_ano = BeautifulSoup(res_ano.text, 'html.parser')
+        if not anos_disponiveis:
+            print("Não encontrei pastas de anos. Verifique se o link da ANS mudou.")
+            return
+
+        for ano_str, url_ano in anos_disponiveis:
+            print(f"\nVerificando ano: {ano_str}...")
+            pasta_ano = os.path.join(DIRETORIO_BASE, "ambulatorial", ano_str)
+            os.makedirs(pasta_ano, exist_ok=True)
+
+            res_ano = requests.get(url_ano, headers=headers, timeout=30)
+            soup_ano = BeautifulSoup(res_ano.text, 'html.parser')
+            
+            # Busca todos os links que contém '.zip' no nome ou no href
+            links_arquivos = soup_ano.find_all('a', href=True)
+            zip_encontrados = [l['href'] for l in links_arquivos if '.zip' in l['href'].lower()]
+
+            if not zip_encontrados:
+                print(f"Nenhum arquivo ZIP listado para o ano {ano_str}.")
+                continue
+
+            for zip_name in zip_encontrados:
+                # Remove caminhos relativos se existirem
+                zip_clean = zip_name.split('/')[-1]
                 
-                # Procura por arquivos ZIP
-                for a in soup_ano.find_all('a', href=True):
-                    zip_name = a['href']
-                    if zip_name.endswith('.zip') and "_REM_" not in zip_name.upper():
-                        caminho_local = os.path.join(pasta_ano, zip_name)
-                        
-                        if not os.path.exists(caminho_local):
-                            print(f"Baixando: {zip_name}")
-                            with requests.get(urljoin(url_ano, zip_name), stream=True, headers=headers) as r:
-                                with open(caminho_local, 'wb') as f:
-                                    for chunk in r.iter_content(chunk_size=65536):
-                                        f.write(chunk)
-                        else:
-                            print(f"Arquivo já existe: {zip_name}")
+                if "_REM_" in zip_clean.upper():
+                    continue
+                
+                caminho_local = os.path.join(pasta_ano, zip_clean)
+                
+                if not os.path.exists(caminho_local):
+                    url_download = urljoin(url_ano, zip_name)
+                    print(f"Iniciando download: {zip_clean}")
+                    try:
+                        with requests.get(url_download, stream=True, headers=headers) as r:
+                            r.raise_for_status()
+                            with open(caminho_local, 'wb') as f:
+                                for chunk in r.iter_content(chunk_size=128*1024): # 128KB chunks
+                                    f.write(chunk)
+                        print(f"Concluído: {zip_clean}")
+                    except Exception as e:
+                        print(f"Erro ao baixar {zip_clean}: {e}")
+                else:
+                    print(f"Já existe: {zip_clean}")
+
     except Exception as e:
-        print(f"Erro no download: {e}")
+        print(f"Erro na conexão principal: {e}")
 
 def processar_sql():
     """Processa os dados usando DuckDB com as correções de parâmetros."""
