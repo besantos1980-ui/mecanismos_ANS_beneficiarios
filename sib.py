@@ -120,4 +120,3 @@ def processar_sql():
 
 if __name__ == "__main__":
     processar_sql()
-``
