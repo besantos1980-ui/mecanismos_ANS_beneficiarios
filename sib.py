@@ -4,6 +4,7 @@ import duckdb
 import pandas as pd
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+import glob
 
 # --- CONFIGURAÇÕES ---
 DIRETORIO_BASE = r"C:\dados_ans" 
@@ -13,55 +14,8 @@ ANOS_INTERESSE = [2018, 2019, 2020, 2021, 2022, 2023, 2024]
 MODALIDADES = (22, 24, 25, 27, 28, 29)
 
 def baixar_arquivos():
-    print("--- INICIANDO FASE DE DOWNLOAD RECURSIVO ---")
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    
-    try:
-        response = requests.get(URL_AMBULATORIAL, headers=headers, timeout=30)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # 1. Mapeia as pastas dos ANOS
-        links_anos = [urljoin(URL_AMBULATORIAL, a['href']) for a in soup.find_all('a', href=True) 
-                      if a.get_text().strip('/').isdigit() and int(a.get_text().strip('/')) in ANOS_INTERESSE]
-
-        for url_ano in links_anos:
-            ano_str = url_ano.strip('/').split('/')[-1]
-            print(f"\nExplorando Ano: {ano_str}")
-
-            # 2. Entra no ano e mapeia as pastas dos ESTADOS (AC, SP, RJ...)
-            res_ano = requests.get(url_ano, headers=headers)
-            soup_ano = BeautifulSoup(res_ano.text, 'html.parser')
-            links_estados = [urljoin(url_ano, a['href']) for a in soup_ano.find_all('a', href=True) 
-                             if len(a.get_text().strip('/')) == 2] # Pastas de estados têm 2 letras
-
-            for url_estado in links_estados:
-                estado_sigla = url_estado.strip('/').split('/')[-1]
-                pasta_local = os.path.join(DIRETORIO_BASE, "ambulatorial", ano_str, estado_sigla)
-                os.makedirs(pasta_local, exist_ok=True)
-
-                # 3. Lista e baixa os arquivos ZIP dentro da pasta do Estado
-                res_estado = requests.get(url_estado, headers=headers)
-                soup_estado = BeautifulSoup(res_estado.text, 'html.parser')
-                zips = [a['href'] for a in soup_estado.find_all('a', href=True) if '.zip' in a['href'].lower()]
-
-                for zip_file in zips:
-                    if "_REM_" in zip_file.upper(): continue
-                    
-                    caminho_final = os.path.join(pasta_local, zip_file)
-                    if not os.path.exists(caminho_final):
-                        print(f"Baixando: {estado_sigla} -> {zip_file}")
-                        try:
-                            r = requests.get(urljoin(url_estado, zip_file), stream=True, headers=headers)
-                            with open(caminho_final, 'wb') as f:
-                                for chunk in r.iter_content(chunk_size=1024*1024): # 1MB chunks
-                                    f.write(chunk)
-                        except Exception as e:
-                            print(f"Erro no download {zip_file}: {e}")
-
-    except Exception as e:
-        print(f"Erro na conexão: {e}")
-
-import glob
+    # ... (mantenha sua função de download anterior se precisar baixar novos)
+    pass
 
 def processar_sql():
     print("\n--- INICIANDO PROCESSAMENTO SQL ---")
@@ -69,12 +23,11 @@ def processar_sql():
     
     path_planos = os.path.join(DIRETORIO_BASE, "planos.csv")
     if not os.path.exists(path_planos):
-        print("Erro: planos.csv não encontrado.")
+        print(f"Erro: {path_planos} não encontrado.")
         return
 
     writer = pd.ExcelWriter(ARQUIVO_SAIDA, engine='xlsxwriter')
 
-    # Visão de Planos com delimitador e encoding forçados
     con.execute(f"""
         CREATE OR REPLACE VIEW planos_base AS 
         SELECT * FROM read_csv_auto('{path_planos}', all_varchar=True, delim=';', encoding='latin-1') 
@@ -83,18 +36,15 @@ def processar_sql():
 
     for ano in ANOS_INTERESSE:
         print(f"Buscando arquivos de {ano} no disco...")
-        
-        # Usamos o glob do Python para achar os arquivos reais
         lista_cons = glob.glob(os.path.join(DIRETORIO_BASE, "ambulatorial", str(ano), "**", "*CONS*.zip"), recursive=True)
         lista_det = glob.glob(os.path.join(DIRETORIO_BASE, "ambulatorial", str(ano), "**", "*DET*.zip"), recursive=True)
 
         if not lista_cons or not lista_det:
-            print(f"Aviso: Nenhum arquivo CONS ou DET encontrado para o ano {ano}. Pulando...")
+            print(f"Aviso: Sem arquivos para o ano {ano}.")
             continue
 
         print(f"Processando {len(lista_cons)} estados de {ano}...")
         try:
-            # Passamos a lista de arquivos diretamente para o DuckDB
             sql = f"""
                 SELECT 
                     p.GR_CONTRATACAO, p.FATOR_MODERADOR, p.ACOMODACAO,
@@ -107,19 +57,19 @@ def processar_sql():
                   ON c.ID_EVENTO_ATENCAO_SAUDE = d.ID_EVENTO_ATENCAO_SAUDE
                 JOIN planos_base p ON c.ID_PLANO = p.ID_PLANO
                 WHERE CAST(TRY_CAST(c.CD_MODALIDADE AS INTEGER) AS INTEGER) IN {MODALIDADES} 
-                  AND CAST(TRY_CAST(c.CD_CARATER_ATENDIMENTO AS INTEGER) AS INTEGER) IN (1, 2)
+                  AND CAST(TRY_CAST(c.CD_CARATER_ATENDIMENTO AS INTEGER) IN (1, 2))
                 GROUP BY 1, 2, 3, 4, 5
             """
             df = con.execute(sql).df()
-            
             if not df.empty:
                 df.to_excel(writer, sheet_name=str(ano), index=False)
                 print(f"Sucesso: Ano {ano} processado.")
-            else:
-                print(f"Aviso: Cruzamento vazio para {ano}.")
-                
         except Exception as e:
             print(f"Erro no ano {ano}: {e}")
 
     writer.close()
     print(f"\nFim! Planilha gerada em: {ARQUIVO_SAIDA}")
+
+# ESTA PARTE É OBRIGATÓRIA PARA O SCRIPT RODAR:
+if __name__ == "__main__":
+    processar_sql()
