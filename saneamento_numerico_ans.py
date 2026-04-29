@@ -1,15 +1,16 @@
 import pandas as pd
 import numpy as np
+import zipfile
 from pathlib import Path
+import io
 
 # =============================
 # CONFIGURAÇÃO
 # =============================
-INPUT_DIR = Path("dados_originais")
+INPUT_DIR = Path("dados_originais")   # aqui ficam os .zip
 OUTPUT_DIR = Path("dados_saneados")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-# Colunas esperadas por tipo
 NUMERIC_COLUMNS_DET = {
     "QT_ITEM_EVENTO_INFORMADO": "int",
     "VL_ITEM_EVENTO_INFORMADO": "float",
@@ -24,25 +25,16 @@ NUMERIC_COLUMNS_CONS = {
 # FUNÇÕES DE SANEAMENTO
 # =============================
 def normalize_numeric(series: pd.Series, target_type: str):
-    """
-    Normaliza números com vírgula decimal, strings vazias e valores inválidos.
-    """
     original = series.copy()
 
-    # Padroniza string
     s = (
         series.astype(str)
         .str.strip()
         .replace({"": np.nan, "nan": np.nan})
+        .str.replace(r"^,", "0.", regex=True)
+        .str.replace(",", ".", regex=False)
     )
 
-    # Corrige casos ",71" → "0.71"
-    s = s.str.replace(r"^,", "0.", regex=True)
-
-    # Vírgula decimal → ponto
-    s = s.str.replace(",", ".", regex=False)
-
-    # Converte
     numeric = pd.to_numeric(s, errors="coerce")
 
     if target_type == "int":
@@ -51,7 +43,7 @@ def normalize_numeric(series: pd.Series, target_type: str):
         return numeric.astype("float"), original
 
 
-def sanitize_dataframe(df: pd.DataFrame, numeric_columns: dict, dataset_name: str):
+def sanitize_dataframe(df, numeric_columns, dataset_name):
     inconsistencies = []
 
     for col, target_type in numeric_columns.items():
@@ -59,7 +51,6 @@ def sanitize_dataframe(df: pd.DataFrame, numeric_columns: dict, dataset_name: st
             continue
 
         sane, original = normalize_numeric(df[col], target_type)
-
         mask_invalid = sane.isna() & original.notna()
 
         if mask_invalid.any():
@@ -71,52 +62,61 @@ def sanitize_dataframe(df: pd.DataFrame, numeric_columns: dict, dataset_name: st
         df[col] = sane
 
     if inconsistencies:
-        inconsistencies_df = pd.concat(inconsistencies, ignore_index=True)
-        inconsistencies_df.to_csv(
+        pd.concat(inconsistencies).to_csv(
             OUTPUT_DIR / f"inconsistencias_{dataset_name}.csv",
-            index=False,
-            sep=";"
+            sep=";",
+            index=False
         )
 
     return df
 
 
 # =============================
-# PIPELINE PRINCIPAL
+# PIPELINE ZIP → SAN
 # =============================
-def process_file(file_path: Path):
-    print(f"➡ Processando: {file_path.name}")
+def process_zip(zip_path: Path):
+    print(f"➡ Processando ZIP: {zip_path.name}")
 
-    df = pd.read_csv(
-        file_path,
-        sep=";",
-        dtype=str,
-        low_memory=False
-    )
+    with zipfile.ZipFile(zip_path, "r") as z:
+        csv_names = [n for n in z.namelist() if n.lower().endswith(".csv")]
 
-    if "_DET" in file_path.name:
-        df = sanitize_dataframe(df, NUMERIC_COLUMNS_DET, file_path.stem)
+        if not csv_names:
+            print("❌ ZIP sem CSV:", zip_path.name)
+            return
+
+        csv_name = csv_names[0]
+
+        with z.open(csv_name) as f:
+            df = pd.read_csv(
+                io.TextIOWrapper(f, encoding="latin-1"),
+                sep=";",
+                dtype=str,
+                low_memory=False
+            )
+
+    if "_DET" in csv_name.upper():
+        df = sanitize_dataframe(df, NUMERIC_COLUMNS_DET, csv_name)
     else:
-        df = sanitize_dataframe(df, NUMERIC_COLUMNS_CONS, file_path.stem)
+        df = sanitize_dataframe(df, NUMERIC_COLUMNS_CONS, csv_name)
 
-    output_file = OUTPUT_DIR / file_path.name.replace(".csv", "_SAN.csv")
+    output_file = OUTPUT_DIR / csv_name.replace(".csv", "_SAN.csv")
     df.to_csv(output_file, sep=";", index=False)
 
-    print(f"✅ Arquivo saneado: {output_file.name}")
+    print(f"✅ Gerado: {output_file.name}")
     print("-" * 60)
 
 
 def main():
-    files = list(INPUT_DIR.glob("*.csv"))
+    zips = list(INPUT_DIR.glob("*.zip"))
 
-    if not files:
-        print("❌ Nenhum arquivo encontrado.")
+    if not zips:
+        print("❌ Nenhum ZIP encontrado.")
         return
 
-    for file in files:
-        process_file(file)
+    for zp in zips:
+        process_zip(zp)
 
-    print("✅ Saneamento finalizado com sucesso.")
+    print("✅ Saneamento concluído.")
 
 
 if __name__ == "__main__":
