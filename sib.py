@@ -61,6 +61,8 @@ def baixar_arquivos():
     except Exception as e:
         print(f"Erro na conexão: {e}")
 
+import glob
+
 def processar_sql():
     print("\n--- INICIANDO PROCESSAMENTO SQL ---")
     con = duckdb.connect()
@@ -72,23 +74,27 @@ def processar_sql():
 
     writer = pd.ExcelWriter(ARQUIVO_SAIDA, engine='xlsxwriter')
 
-    # Carregando planos com detecção automática de encoding
+    # Visão de Planos com delimitador e encoding forçados
     con.execute(f"""
         CREATE OR REPLACE VIEW planos_base AS 
-        SELECT * FROM read_csv_auto('{path_planos}', all_varchar=True, ignore_errors=True) 
+        SELECT * FROM read_csv_auto('{path_planos}', all_varchar=True, delim=';', encoding='latin-1') 
         WHERE COBERTURA = 'Assistência Médica'
     """)
 
     for ano in ANOS_INTERESSE:
-        path_cons = os.path.join(DIRETORIO_BASE, "ambulatorial", str(ano), "**", "*CONS*.zip")
-        path_det = os.path.join(DIRETORIO_BASE, "ambulatorial", str(ano), "**", "*DET*.zip")
+        print(f"Buscando arquivos de {ano} no disco...")
         
-        print(f"Processando todos os estados de {ano} (isso pode levar alguns minutos)...")
+        # Usamos o glob do Python para achar os arquivos reais
+        lista_cons = glob.glob(os.path.join(DIRETORIO_BASE, "ambulatorial", str(ano), "**", "*CONS*.zip"), recursive=True)
+        lista_det = glob.glob(os.path.join(DIRETORIO_BASE, "ambulatorial", str(ano), "**", "*DET*.zip"), recursive=True)
+
+        if not lista_cons or not lista_det:
+            print(f"Aviso: Nenhum arquivo CONS ou DET encontrado para o ano {ano}. Pulando...")
+            continue
+
+        print(f"Processando {len(lista_cons)} estados de {ano}...")
         try:
-            # Mudanças:
-            # 1. Removido encoding fixo (usando auto-detect)
-            # 2. ignore_errors=True para não travar em caracteres inválidos
-            # 3. sample_size=-1 para melhorar a detecção em arquivos grandes
+            # Passamos a lista de arquivos diretamente para o DuckDB
             sql = f"""
                 SELECT 
                     p.GR_CONTRATACAO, p.FATOR_MODERADOR, p.ACOMODACAO,
@@ -96,8 +102,8 @@ def processar_sql():
                     COUNT(DISTINCT c.ID_EVENTO_ATENCAO_SAUDE) as EVENTOS_UNICOS,
                     SUM(CAST(TRY_CAST(d.QT_ITEM_EVENTO_INFORMADO AS DOUBLE) AS DOUBLE)) as QTDE,
                     SUM(CAST(TRY_CAST(d.VL_ITEM_PAGO_FORNECEDOR AS DOUBLE) AS DOUBLE)) as VALOR
-                FROM read_csv_auto('{path_cons}', all_varchar=True, union_by_name=True, ignore_errors=True, sample_size=-1) c
-                JOIN read_csv_auto('{path_det}', all_varchar=True, union_by_name=True, ignore_errors=True, sample_size=-1) d 
+                FROM read_csv_auto({lista_cons}, all_varchar=True, union_by_name=True, delim=';', encoding='latin-1', ignore_errors=True) c
+                JOIN read_csv_auto({lista_det}, all_varchar=True, union_by_name=True, delim=';', encoding='latin-1', ignore_errors=True) d 
                   ON c.ID_EVENTO_ATENCAO_SAUDE = d.ID_EVENTO_ATENCAO_SAUDE
                 JOIN planos_base p ON c.ID_PLANO = p.ID_PLANO
                 WHERE CAST(TRY_CAST(c.CD_MODALIDADE AS INTEGER) AS INTEGER) IN {MODALIDADES} 
@@ -108,16 +114,13 @@ def processar_sql():
             
             if not df.empty:
                 df.to_excel(writer, sheet_name=str(ano), index=False)
-                print(f"Sucesso: Ano {ano} processado e gravado.")
+                print(f"Sucesso: Ano {ano} processado.")
             else:
-                print(f"Aviso: O cruzamento para o ano {ano} não retornou dados. Verifique se os IDs de planos batem.")
+                print(f"Aviso: Cruzamento vazio para {ano}.")
                 
         except Exception as e:
             print(f"Erro no ano {ano}: {e}")
 
     writer.close()
     print(f"\nFim! Planilha gerada em: {ARQUIVO_SAIDA}")
-
-if __name__ == "__main__":
-    baixar_arquivos()
     processar_sql()
