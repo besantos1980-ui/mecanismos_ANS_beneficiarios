@@ -7,7 +7,7 @@ import io
 # =============================
 # CONFIGURAÇÃO
 # =============================
-INPUT_DIR = Path("dados_originais")   # aqui ficam os .zip
+BASE_DIR = Path("dados_originais")   # raiz (ano/UF/mês abaixo daqui)
 OUTPUT_DIR = Path("dados_saneados")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -62,7 +62,7 @@ def sanitize_dataframe(df, numeric_columns, dataset_name):
         df[col] = sane
 
     if inconsistencies:
-        pd.concat(inconsistencies).to_csv(
+        pd.concat(inconsistencies, ignore_index=True).to_csv(
             OUTPUT_DIR / f"inconsistencias_{dataset_name}.csv",
             sep=";",
             index=False
@@ -72,16 +72,16 @@ def sanitize_dataframe(df, numeric_columns, dataset_name):
 
 
 # =============================
-# PIPELINE ZIP → SAN
+# PIPELINE ZIP → SAN (RECURSIVO)
 # =============================
 def process_zip(zip_path: Path):
-    print(f"➡ Processando ZIP: {zip_path.name}")
+    print(f"➡ Processando: {zip_path}")
 
     with zipfile.ZipFile(zip_path, "r") as z:
         csv_names = [n for n in z.namelist() if n.lower().endswith(".csv")]
 
         if not csv_names:
-            print("❌ ZIP sem CSV:", zip_path.name)
+            print("⚠ ZIP sem CSV:", zip_path.name)
             return
 
         csv_name = csv_names[0]
@@ -95,28 +95,30 @@ def process_zip(zip_path: Path):
             )
 
     if "_DET" in csv_name.upper():
-        df = sanitize_dataframe(df, NUMERIC_COLUMNS_DET, csv_name)
+        df = sanitize_dataframe(df, NUMERIC_COLUMNS_DET, Path(csv_name).stem)
     else:
-        df = sanitize_dataframe(df, NUMERIC_COLUMNS_CONS, csv_name)
+        df = sanitize_dataframe(df, NUMERIC_COLUMNS_CONS, Path(csv_name).stem)
 
     output_file = OUTPUT_DIR / csv_name.replace(".csv", "_SAN.csv")
     df.to_csv(output_file, sep=";", index=False)
 
     print(f"✅ Gerado: {output_file.name}")
-    print("-" * 60)
+    print("-" * 80)
 
 
 def main():
-    zips = list(INPUT_DIR.glob("*.zip"))
+    zips = list(BASE_DIR.rglob("*.zip"))
 
     if not zips:
-        print("❌ Nenhum ZIP encontrado.")
+        print("❌ Nenhum ZIP encontrado em subpastas de:", BASE_DIR)
         return
+
+    print(f"🔍 {len(zips)} arquivos ZIP encontrados.\n")
 
     for zp in zips:
         process_zip(zp)
 
-    print("✅ Saneamento concluído.")
+    print("✅ Saneamento concluído para todos os arquivos.")
 
 
 if __name__ == "__main__":
