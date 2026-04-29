@@ -123,4 +123,3 @@ def processar_sql():
 
     writer.close()
     print(f"\nFim! Planilha gerada em: {ARQUIVO_SAIDA}")
-    processar_sql()
