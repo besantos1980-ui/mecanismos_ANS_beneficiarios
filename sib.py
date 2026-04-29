@@ -45,6 +45,7 @@ def processar_sql():
 
         print(f"Processando {len(lista_cons)} estados de {ano}...")
         try:
+            # SQL CORRIGIDO: parênteses ajustados nos filtros
             sql = f"""
                 SELECT 
                     p.GR_CONTRATACAO, p.FATOR_MODERADOR, p.ACOMODACAO,
@@ -57,13 +58,15 @@ def processar_sql():
                   ON c.ID_EVENTO_ATENCAO_SAUDE = d.ID_EVENTO_ATENCAO_SAUDE
                 JOIN planos_base p ON c.ID_PLANO = p.ID_PLANO
                 WHERE CAST(TRY_CAST(c.CD_MODALIDADE AS INTEGER) AS INTEGER) IN {MODALIDADES} 
-                  AND CAST(TRY_CAST(c.CD_CARATER_ATENDIMENTO AS INTEGER) IN (1, 2))
+                  AND CAST(TRY_CAST(c.CD_CARATER_ATENDIMENTO AS INTEGER) AS INTEGER) IN (1, 2)
                 GROUP BY 1, 2, 3, 4, 5
             """
             df = con.execute(sql).df()
             if not df.empty:
                 df.to_excel(writer, sheet_name=str(ano), index=False)
                 print(f"Sucesso: Ano {ano} processado.")
+            else:
+                print(f"Aviso: Cruzamento vazio para {ano}.")
         except Exception as e:
             print(f"Erro no ano {ano}: {e}")
 
