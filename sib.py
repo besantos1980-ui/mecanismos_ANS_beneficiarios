@@ -15,12 +15,12 @@ ANOS_INTERESSE = [2018, 2019, 2020, 2021, 2022, 2023, 2024]
 MODALIDADES = (22, 24, 25, 27, 28, 29)
 
 # =========================
-# Extrai TXT do ZIP
+# Extrair TXT do ZIP
 # =========================
 def extrair_txt(zip_path):
     try:
-        with zipfile.ZipFile(zip_path, 'r') as z:
-            nomes = [n for n in z.namelist() if n.lower().endswith('.txt')]
+        with zipfile.ZipFile(zip_path, "r") as z:
+            nomes = [n for n in z.namelist() if n.lower().endswith(".txt")]
             if not nomes:
                 return None
             tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".txt")
@@ -65,29 +65,49 @@ def processar_sql():
 
             try:
                 sql = f"""
+                    WITH cons AS (
+                        SELECT
+                            COALESCE(
+                                ID_EVENTO_ATENCAO_SAUDE,
+                                ID_EVENTO_ATENCAO
+                            ) AS ID_EVENTO,
+                            TRY_CAST(CD_MODALIDADE AS INTEGER) AS CD_MODALIDADE,
+                            TRY_CAST(CD_CARATER_ATENDIMENTO AS INTEGER) AS CD_CARATER_ATENDIMENTO
+                        FROM read_csv(
+                            '{cons_txt}',
+                            delim='|',
+                            header=True,
+                            encoding='latin1',
+                            ignore_errors=True
+                        )
+                    ),
+                    det AS (
+                        SELECT
+                            COALESCE(
+                                ID_EVENTO_ATENCAO_SAUDE,
+                                ID_EVENTO_ATENCAO
+                            ) AS ID_EVENTO,
+                            TRY_CAST(QT_ITEM_EVENTO_INFORMADO AS DOUBLE) AS QTDE,
+                            TRY_CAST(VL_ITEM_PAGO_FORNECEDOR AS DOUBLE) AS VALOR
+                        FROM read_csv(
+                            '{det_txt}',
+                            delim='|',
+                            header=True,
+                            encoding='latin1',
+                            ignore_errors=True
+                        )
+                    )
                     SELECT
-                        TRY_CAST(c.CD_MODALIDADE AS INTEGER) AS CD_MODALIDADE,
-                        TRY_CAST(c.CD_CARATER_ATENDIMENTO AS INTEGER) AS CD_CARATER_ATENDIMENTO,
-                        COUNT(DISTINCT c.ID_EVENTO_ATENCAO_SAUDE) AS EVENTOS,
-                        SUM(TRY_CAST(d.QT_ITEM_EVENTO_INFORMADO AS DOUBLE)) AS QTDE,
-                        SUM(TRY_CAST(d.VL_ITEM_PAGO_FORNECEDOR AS DOUBLE)) AS VALOR
-                    FROM read_csv(
-                        '{cons_txt}',
-                        delim='|',
-                        header=True,
-                        encoding='latin1',
-                        ignore_errors=True
-                    ) c
-                    JOIN read_csv(
-                        '{det_txt}',
-                        delim='|',
-                        header=True,
-                        encoding='latin1',
-                        ignore_errors=True
-                    ) d
-                      ON c.ID_EVENTO_ATENCAO_SAUDE = d.ID_EVENTO_ATENCAO_SAUDE
-                    WHERE TRY_CAST(c.CD_MODALIDADE AS INTEGER) IN {MODALIDADES}
-                      AND TRY_CAST(c.CD_CARATER_ATENDIMENTO AS INTEGER) IN (1,2)
+                        c.CD_MODALIDADE,
+                        c.CD_CARATER_ATENDIMENTO,
+                        COUNT(DISTINCT c.ID_EVENTO) AS EVENTOS,
+                        SUM(d.QTDE) AS QTDE,
+                        SUM(d.VALOR) AS VALOR
+                    FROM cons c
+                    JOIN det d
+                      ON c.ID_EVENTO = d.ID_EVENTO
+                    WHERE c.CD_MODALIDADE IN {MODALIDADES}
+                      AND c.CD_CARATER_ATENDIMENTO IN (1, 2)
                     GROUP BY 1,2
                 """
 
