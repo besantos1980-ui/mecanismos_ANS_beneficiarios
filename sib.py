@@ -17,7 +17,7 @@ def baixar_arquivos():
     # ... (mantenha sua função de download anterior se precisar baixar novos)
     pass
 
-def processar_sql():
+ddef processar_sql():
     print("\n--- INICIANDO PROCESSAMENTO SQL ---")
     con = duckdb.connect()
     
