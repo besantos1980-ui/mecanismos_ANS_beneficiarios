@@ -54,7 +54,7 @@ def processar_sql():
             '{path_planos}',
             header=True,
             delim=';',
-            encoding='latin1',
+            encoding='latin-1',
             ignore_errors=True,
             all_varchar=True
         )
@@ -103,14 +103,14 @@ def processar_sql():
                         '{cons_txt}',
                         header=True,
                         delim='|',
-                        encoding='latin1',
+                        encoding='latin-1',
                         ignore_errors=True
                     ) c
                     JOIN read_csv(
                         '{det_txt}',
                         header=True,
                         delim='|',
-                        encoding='latin1',
+                        encoding='latin-1',
                         ignore_errors=True
                     ) d
                       ON c.ID_EVENTO_ATENCAO_SAUDE = d.ID_EVENTO_ATENCAO_SAUDE
