@@ -28,9 +28,10 @@ def processar_sql():
 
     writer = pd.ExcelWriter(ARQUIVO_SAIDA, engine='xlsxwriter')
 
+    # Para os planos, tentamos detecção automática primeiro
     con.execute(f"""
         CREATE OR REPLACE VIEW planos_base AS 
-        SELECT * FROM read_csv_auto('{path_planos}', all_varchar=True, delim=';', encoding='latin-1') 
+        SELECT * FROM read_csv_auto('{path_planos}', all_varchar=True, ignore_errors=True) 
         WHERE COBERTURA = 'Assistência Médica'
     """)
 
@@ -45,7 +46,9 @@ def processar_sql():
 
         print(f"Processando {len(lista_cons)} estados de {ano}...")
         try:
-            # SQL CORRIGIDO: parênteses ajustados nos filtros
+            # RETIRAMOS o encoding='latin-1' fixo.
+            # O DuckDB vai tentar detectar automaticamente para cada arquivo.
+            # Adicionamos null_padding=True caso falte alguma coluna em arquivos antigos.
             sql = f"""
                 SELECT 
                     p.GR_CONTRATACAO, p.FATOR_MODERADOR, p.ACOMODACAO,
@@ -53,8 +56,8 @@ def processar_sql():
                     COUNT(DISTINCT c.ID_EVENTO_ATENCAO_SAUDE) as EVENTOS_UNICOS,
                     SUM(CAST(TRY_CAST(d.QT_ITEM_EVENTO_INFORMADO AS DOUBLE) AS DOUBLE)) as QTDE,
                     SUM(CAST(TRY_CAST(d.VL_ITEM_PAGO_FORNECEDOR AS DOUBLE) AS DOUBLE)) as VALOR
-                FROM read_csv_auto({lista_cons}, all_varchar=True, union_by_name=True, delim=';', encoding='latin-1', ignore_errors=True) c
-                JOIN read_csv_auto({lista_det}, all_varchar=True, union_by_name=True, delim=';', encoding='latin-1', ignore_errors=True) d 
+                FROM read_csv_auto({lista_cons}, all_varchar=True, union_by_name=True, ignore_errors=True, null_padding=True) c
+                JOIN read_csv_auto({lista_det}, all_varchar=True, union_by_name=True, ignore_errors=True, null_padding=True) d 
                   ON c.ID_EVENTO_ATENCAO_SAUDE = d.ID_EVENTO_ATENCAO_SAUDE
                 JOIN planos_base p ON c.ID_PLANO = p.ID_PLANO
                 WHERE CAST(TRY_CAST(c.CD_MODALIDADE AS INTEGER) AS INTEGER) IN {MODALIDADES} 
@@ -66,13 +69,10 @@ def processar_sql():
                 df.to_excel(writer, sheet_name=str(ano), index=False)
                 print(f"Sucesso: Ano {ano} processado.")
             else:
-                print(f"Aviso: Cruzamento vazio para {ano}.")
+                print(f"Aviso: O cruzamento para o ano {ano} não retornou dados.")
         except Exception as e:
-            print(f"Erro no ano {ano}: {e}")
+            print(f"Erro persistente no ano {ano}: {e}")
 
     writer.close()
     print(f"\nFim! Planilha gerada em: {ARQUIVO_SAIDA}")
-
-# ESTA PARTE É OBRIGATÓRIA PARA O SCRIPT RODAR:
-if __name__ == "__main__":
     processar_sql()
