@@ -1,5 +1,8 @@
-from pathlib import Path
 import pandas as pd
+import zipfile
+import io
+from pathlib import Path
+
 
 from utils_zip import read_san_zip   # ou cole a função no próprio arquivo
 
