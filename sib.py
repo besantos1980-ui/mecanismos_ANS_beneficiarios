@@ -3,9 +3,9 @@ import zipfile
 import io
 from pathlib import Path
 
-
-from utils_zip import read_san_zip   # ou cole a função no próprio arquivo
-
+# =============================
+# FUNÇÃO UTILITÁRIA
+# =============================
 def read_san_zip(zip_path: Path) -> pd.DataFrame:
     """
     Lê um arquivo *_SAN.zip contendo um único CSV e retorna DataFrame.
@@ -24,6 +24,7 @@ def read_san_zip(zip_path: Path) -> pd.DataFrame:
             )
     return df
 
+
 # =============================
 # CONFIGURAÇÃO
 # =============================
@@ -38,7 +39,7 @@ def processar_sib():
 
     if not arquivos:
         print("❌ Nenhum arquivo SIB saneado encontrado.")
-        return
+        return None
 
     print(f"🔍 {len(arquivos)} arquivos SIB encontrados.\n")
 
@@ -47,16 +48,9 @@ def processar_sib():
     for zp in arquivos:
         print(f"➡ Lendo {zp.name}")
         df = read_san_zip(zp)
-
-        # ✅ A partir daqui, seus dados:
-        # - já estão numericamente saneados
-        # - sem vírgula decimal
-        # - sem strings em colunas numéricas
-
         dfs.append(df)
 
     sib = pd.concat(dfs, ignore_index=True)
-
     print(f"✅ Base SIB consolidada: {len(sib):,} registros")
 
     return sib
@@ -64,15 +58,12 @@ def processar_sib():
 
 def main():
     sib = processar_sib()
-
     if sib is None:
         return
 
-    # ===== EXEMPLO DE USO =====
-    # agregação simples (exemplo)
     resumo = (
         sib
-        .groupby("MODALIDADE")
+        .groupby("MODALIDADE", dropna=False)
         .size()
         .reset_index(name="qt_beneficiarios")
     )
