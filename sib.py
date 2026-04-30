@@ -29,7 +29,7 @@ def read_san_zip(zip_path: Path) -> pd.DataFrame:
 # CONFIGURAÇÃO
 # =============================
 BASE_DIR = Path("dados_saneados")
-PADRAO = "*SIB*_SAN.zip"
+PADRAO = "*.zip"
 
 # =============================
 # PIPELINE PRINCIPAL
