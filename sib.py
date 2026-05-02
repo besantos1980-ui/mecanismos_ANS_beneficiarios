@@ -11,7 +11,7 @@ BASE_DIR = Path(r"C:\dados_ans\dados_saneados")
 # IMPORTANTE:
 # 1) Filtra pelo nome do ZIP (evita pegar AMB_*_SAN.zip)
 # 2) Ajuste o token "SIB" se seus arquivos usam outro padrão (ex.: "SIBBEN")
-PADRAO_ZIP_SIB = "*SIB*_SAN.zip"
+PADRAO_ZIP_SIB = "**_SAN.zip"
 
 # Colunas mínimas para o exemplo (ajuste conforme sua análise real)
 # Se MODALIDADE não existir no SIB, troque por CD_MODALIDADE / NM_MODALIDADE / etc.
